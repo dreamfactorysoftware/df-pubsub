@@ -1,0 +1,46 @@
+{
+  "name":        "dreamfactory/df-pubsub",
+  "description": "Core package for DreamFactory message queuing services",
+  "keywords":    [
+    "dreamfactory",
+    "dsp",
+    "rest",
+    "iot",
+    "amqp",
+    "rabbitmq",
+    "mqtt",
+    "pubsub"
+  ],
+  "homepage":    "https://github.com/dreamfactorysoftware/df-pubsub",
+  "license":     "proprietary",
+  "authors":     [
+    {
+      "name":  "Arif Islam",
+      "email": "arifislam@dreamfactory.com"
+    }
+  ],
+  "support":     {
+    "email":  "arifislam@dreamfactory.com",
+    "source": "https://github.com/dreamfactorysoftware/df-pubsub",
+    "issues": "https://github.com/dreamfactorysoftware/df-pubsub/issues",
+    "wiki":   "https://github.com/dreamfactorysoftware/df-pubsub/wiki"
+  },
+  "require":     {
+    "dreamfactory/df-core": "~0.13.0"
+  },
+  "autoload":    {
+    "psr-4": {
+      "DreamFactory\\Core\\PubSub\\": "src/"
+    }
+  },
+  "extra":       {
+    "branch-alias": {
+      "dev-develop": "0.1.x-dev"
+    },
+    "laravel": {
+      "providers": [
+        "DreamFactory\\Core\\PubSub\\ServiceProvider"
+      ]
+    }
+  }
+}
