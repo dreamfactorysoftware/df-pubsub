@@ -3,6 +3,12 @@
 namespace DreamFactory\Core\PubSub\Resources;
 
 use DreamFactory\Core\Resources\BaseRestResource;
+use DreamFactory\Core\Exceptions\InternalServerErrorException;
+use DreamFactory\Core\PubSub\Jobs\BaseSubscriber;
+use DreamFactory\Core\Exceptions\NotFoundException;
+use DreamFactory\Core\Exceptions\NotImplementedException;
+use DB;
+use Cache;
 
 class Sub extends BaseRestResource
 {
@@ -17,9 +23,58 @@ class Sub extends BaseRestResource
     /**
      * {@inheritdoc}
      */
+    protected function handleGET()
+    {
+        if (config('queue.default') == 'database') {
+            $subscription = Cache::get(BaseSubscriber::SUBSCRIPTION);
+
+            if (!empty($subscription)) {
+                $payload = json_decode($subscription, true);
+
+                return $payload;
+            } else {
+                throw new NotFoundException('Did not find any subscribed topic(s)/queue(s). Subscription job may not be running.');
+            }
+        } else {
+            throw new NotImplementedException('Viewing subscribed topics/queues is only supported for database queue at this time.');
+        }
+    }
+
+    /**
+     * {@inheritdoc}
+     */
     protected static function getResourceIdentifier()
     {
         return static::RESOURCE_IDENTIFIER;
+    }
+
+    /**
+     * @return bool
+     * @throws \DreamFactory\Core\Exceptions\InternalServerErrorException
+     */
+    protected function isJobRunning($type)
+    {
+        $subscription = Cache::get(BaseSubscriber::SUBSCRIPTION);
+
+        if (!empty($subscription)) {
+            return true;
+        }
+
+        $jobs = DB::table('jobs')
+            ->where('payload', 'like', "%Subscribe%")
+            ->where('payload', 'like', "%$type%")
+            ->where('payload', 'like', "%DreamFactory%")
+            ->get(['id', 'attempts']);
+
+        foreach ($jobs as $job) {
+            if ($job->attempts == 1) {
+                return true;
+            } elseif ($job->attempts == 0) {
+                throw new InternalServerErrorException('Unprocessed job found in the queue. Please make sure queue worker is running');
+            }
+        }
+
+        return false;
     }
 
     /** {@inheritdoc} */
