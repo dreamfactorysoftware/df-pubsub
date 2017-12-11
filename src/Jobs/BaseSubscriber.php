@@ -78,9 +78,10 @@ abstract class BaseSubscriber implements ShouldQueue
     public function failed(\Exception $exception)
     {
         if (!$exception instanceof MaxAttemptsExceededException) {
-            Log::debug("[MESSAGE_QUEUE] Job failed. " . $exception->getMessage());
-            Cache::forget(static::SUBSCRIPTION);
-            Cache::forever(static::TERMINATOR, false);
+            Log::debug("[JOB_QUEUE] Job failed. " . $exception->getMessage());
+        } else {
+            Log::debug("[JOB_QUEUE] Job terminating after attempting maximum amount of time.");
         }
+        Cache::forever(static::TERMINATOR, false);
     }
 }

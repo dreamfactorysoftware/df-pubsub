@@ -2,13 +2,14 @@
 
 namespace DreamFactory\Core\PubSub\Resources;
 
+use DreamFactory\Core\PubSub\Components\SwaggerDefinitions;
+use DreamFactory\Core\PubSub\Jobs\BaseSubscriber;
 use DreamFactory\Core\Resources\BaseRestResource;
 use DreamFactory\Core\Exceptions\InternalServerErrorException;
-use DreamFactory\Core\PubSub\Jobs\BaseSubscriber;
 use DreamFactory\Core\Exceptions\NotFoundException;
 use DreamFactory\Core\Exceptions\NotImplementedException;
-use DB;
 use Cache;
+use DB;
 
 class Sub extends BaseRestResource
 {
@@ -23,15 +24,21 @@ class Sub extends BaseRestResource
     /**
      * {@inheritdoc}
      */
+    protected static function getResourceIdentifier()
+    {
+        return static::RESOURCE_IDENTIFIER;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
     protected function handleGET()
     {
         if (config('queue.default') == 'database') {
-            $subscription = Cache::get(BaseSubscriber::SUBSCRIPTION);
+            $subscription = $this->getSubscriptionPayload();
 
             if (!empty($subscription)) {
-                $payload = json_decode($subscription, true);
-
-                return $payload;
+                return $subscription;
             } else {
                 throw new NotFoundException('Did not find any subscribed topic(s)/queue(s). Subscription job may not be running.');
             }
@@ -43,28 +50,23 @@ class Sub extends BaseRestResource
     /**
      * {@inheritdoc}
      */
-    protected static function getResourceIdentifier()
+    protected function handleDELETE()
     {
-        return static::RESOURCE_IDENTIFIER;
+        // Put a terminate flag in the cache to terminate the subscription job.
+        Cache::put(BaseSubscriber::TERMINATOR, true, config('df.default_cache_ttl', 300));
+
+        return ["success" => true];
     }
 
     /**
+     * Checks to if any subscription job currently running or not
+     *
      * @return bool
      * @throws \DreamFactory\Core\Exceptions\InternalServerErrorException
      */
-    protected function isJobRunning($type)
+    protected function isJobRunning()
     {
-        $subscription = Cache::get(BaseSubscriber::SUBSCRIPTION);
-
-        if (!empty($subscription)) {
-            return true;
-        }
-
-        $jobs = DB::table('jobs')
-            ->where('payload', 'like', "%Subscribe%")
-            ->where('payload', 'like', "%$type%")
-            ->where('payload', 'like', "%DreamFactory%")
-            ->get(['id', 'attempts']);
+        $jobs = $this->getSubscriptionJobs();
 
         foreach ($jobs as $job) {
             if ($job->attempts == 1) {
@@ -75,6 +77,44 @@ class Sub extends BaseRestResource
         }
 
         return false;
+    }
+
+    /**
+     * Returns subscription payload data from cache.
+     *
+     * @return array
+     */
+    protected function getSubscriptionPayload()
+    {
+        $jobs = $this->getSubscriptionJobs();
+        $out = [];
+        foreach ($jobs as $job) {
+            $payload = json_decode($job->payload, true);
+            $obj = unserialize(array_get($payload, 'data.command'));
+            $out[] = [
+                'sub'       => $obj->getPayload(),
+                'attempted' => $job->attempts
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Returns all subscription jobs.
+     *
+     * @return \Illuminate\Support\Collection
+     */
+    protected function getSubscriptionJobs()
+    {
+        $type = strtoupper($this->parent->getQueueType());
+        $jobs = DB::table('jobs')
+            ->where('payload', 'like', "%Subscribe%")
+            ->where('payload', 'like', "%$type%")
+            ->where('payload', 'like', "%DreamFactory%")
+            ->get(['id', 'attempts', 'payload']);
+
+        return $jobs;
     }
 
     /** {@inheritdoc} */
@@ -100,43 +140,23 @@ class Sub extends BaseRestResource
                                         'type'  => 'array',
                                         'items' => [
                                             'type'       => 'object',
-                                            'required'   => ['topic', 'service'],
+                                            'required'   => ['sub', 'attempted'],
                                             'properties' => [
-                                                'topic'   => ['type' => 'string'],
-                                                'service' => [
-                                                    'type'       => 'object',
-                                                    'required'   => ['endpoint'],
-                                                    'properties' => [
-                                                        'endpoint'  => [
-                                                            'type'        => 'string',
-                                                            'description' => 'Internal DreamFactory Endpoint. Ex: system/role'
-                                                        ],
-                                                        'verb'      => [
-                                                            'type'        => 'string',
-                                                            'description' => 'GET, POST, PATCH, PUT, DELETE'
-                                                        ],
-                                                        'parameter' => [
-                                                            'type'  => 'array',
-                                                            'items' => [
-                                                                "{name}" => "{value}"
-                                                            ]
-                                                        ],
-                                                        'header'    => [
-                                                            'type'  => 'array',
-                                                            'items' => [
-                                                                "{name}" => "{value}"
-                                                            ]
-                                                        ],
-                                                        'payload'   => [
-                                                            'type'  => 'array',
-                                                            'items' => [
-                                                                "{name}" => "{value}"
-                                                            ]
+                                                'sub'       => [
+                                                    'type'  => 'array',
+                                                    'items' => [
+                                                        'type'       => 'object',
+                                                        'required'   => ['topic', 'service'],
+                                                        'properties' => [
+                                                            'topic'   => ['type' => 'string'],
+                                                            'service' => SwaggerDefinitions::getServiceDef(),
                                                         ]
                                                     ]
                                                 ],
-                                            ]
-                                        ]
+                                                'attempted' => ['type' => 'integer'],
+                                            ],
+                                        ],
+
                                     ]
                                 ]
                             ]
@@ -148,7 +168,7 @@ class Sub extends BaseRestResource
                     'description' => 'Subscribes to topic(s)',
                     'operationId' => 'subscribeTo' . $capitalized . 'Topics',
                     'requestBody' => [
-                        'description' => 'Device token to register',
+                        'description' => 'Subscription details',
                         'content'     => [
                             'application/json' => [
                                 'schema' => [
@@ -158,38 +178,7 @@ class Sub extends BaseRestResource
                                         'required'   => ['topic', 'service'],
                                         'properties' => [
                                             'topic'   => ['type' => 'string'],
-                                            'service' => [
-                                                'type'       => 'object',
-                                                'required'   => ['endpoint'],
-                                                'properties' => [
-                                                    'endpoint'  => [
-                                                        'type'        => 'string',
-                                                        'description' => 'Internal DreamFactory Endpoint. Ex: system/role'
-                                                    ],
-                                                    'header'    => [
-                                                        'type'  => 'array',
-                                                        'items' => [
-                                                            "{name}" => "{value}"
-                                                        ]
-                                                    ],
-                                                    'verb'      => [
-                                                        'type'        => 'string',
-                                                        'description' => 'GET, POST, PATCH, PUT, DELETE'
-                                                    ],
-                                                    'parameter' => [
-                                                        'type'  => 'array',
-                                                        'items' => [
-                                                            "{name}" => "{value}"
-                                                        ]
-                                                    ],
-                                                    'payload'   => [
-                                                        'type'  => 'array',
-                                                        'items' => [
-                                                            "{name}" => "{value}"
-                                                        ]
-                                                    ],
-                                                ],
-                                            ],
+                                            'service' => SwaggerDefinitions::getServiceDef(),
                                         ],
                                     ],
                                 ],
@@ -202,8 +191,8 @@ class Sub extends BaseRestResource
                     ],
                 ],
                 'delete' => [
-                    'summary'     => 'Terminate subscriptions',
-                    'description' => 'Terminates subscriptions to all topic(s)',
+                    'summary'     => 'Terminate subscription(s)',
+                    'description' => 'Terminate subscription(s)',
                     'operationId' => 'terminatesSubscriptionsTo' . $capitalized,
                     'responses'   => [
                         '200' => ['$ref' => '#/components/responses/Success']

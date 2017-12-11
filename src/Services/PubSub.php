@@ -30,5 +30,19 @@ abstract class PubSub extends BaseRestService
         return $this->client;
     }
 
-    protected abstract function setClient($config);
+    /**
+     * Sets the messaging client;
+     *
+     * @param $config
+     *
+     * @return mixed
+     */
+    abstract protected function setClient($config);
+
+    /**
+     * Returns messaging queue type (AMQP or MQTT);
+     *
+     * @return mixed
+     */
+    abstract public function getQueueType();
 }
