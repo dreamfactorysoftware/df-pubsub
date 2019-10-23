@@ -53,7 +53,7 @@ class Sub extends BaseRestResource
     protected function handleDELETE()
     {
         // Put a terminate flag in the cache to terminate the subscription job.
-        Cache::put(BaseSubscriber::TERMINATOR, true, config('df.default_cache_ttl', 300));
+        Cache::put(BaseSubscriber::TERMINATOR, true, config('df.default_cache_ttl', 18000));
 
         return ["success" => true];
     }
