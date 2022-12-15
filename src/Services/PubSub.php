@@ -5,6 +5,7 @@ namespace DreamFactory\Core\PubSub\Services;
 use DreamFactory\Core\Services\BaseRestService;
 use DreamFactory\Core\PubSub\Contracts\MessageQueueInterface;
 use DreamFactory\Core\Utility\Session;
+use \Illuminate\Support\Arr;
 
 abstract class PubSub extends BaseRestService
 {
@@ -15,7 +16,7 @@ abstract class PubSub extends BaseRestService
     {
         parent::__construct($settings);
 
-        $config = array_get($settings, 'config');
+        $config = Arr::get($settings, 'config');
         Session::replaceLookups($config, true);
         $this->setClient($config);
     }

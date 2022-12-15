@@ -8,6 +8,8 @@ use DreamFactory\Core\Resources\BaseRestResource;
 use DreamFactory\Core\Exceptions\InternalServerErrorException;
 use DreamFactory\Core\Exceptions\NotFoundException;
 use DreamFactory\Core\Exceptions\NotImplementedException;
+use \Illuminate\Support\Arr;
+use \Illuminate\Support\Str;
 use Cache;
 use DB;
 
@@ -90,7 +92,7 @@ class Sub extends BaseRestResource
         $out = [];
         foreach ($jobs as $job) {
             $payload = json_decode($job->payload, true);
-            $obj = unserialize(array_get($payload, 'data.command'));
+            $obj = unserialize(Arr::get($payload, 'data.command'));
             $out[] = [
                 'sub'       => $obj->getPayload(),
                 'attempted' => $job->attempts
@@ -121,7 +123,7 @@ class Sub extends BaseRestResource
     protected function getApiDocPaths()
     {
         $service = $this->getServiceName();
-        $capitalized = camelize($service);
+        $capitalized = Str::camel($service);
         $resourceName = strtolower($this->name);
         $path = '/' . $resourceName;
 
