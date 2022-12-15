@@ -58,7 +58,7 @@ abstract class BaseSubscriber implements ShouldQueue
     public function __construct(MessageQueueInterface $client, $payload)
     {
         $this->client = $client;
-        if (!$this->validatePayload($payload)) {
+        if (!static::validatePayload($payload)) {
             throw new \Exception('Invalid payload supplied for subscription job.');
         }
         $this->payload = $payload;

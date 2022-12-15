@@ -3,6 +3,7 @@
 namespace DreamFactory\Core\PubSub\Resources;
 
 use DreamFactory\Core\Resources\BaseRestResource;
+use \Illuminate\Support\Str;
 
 class Pub extends BaseRestResource
 {
@@ -26,7 +27,7 @@ class Pub extends BaseRestResource
     protected function getApiDocPaths()
     {
         $service = $this->getServiceName();
-        $capitalized = camelize($service);
+        $capitalized = Str::camel($service);
         $resourceName = strtolower($this->name);
         $path = '/' . $resourceName;
         $base = [
