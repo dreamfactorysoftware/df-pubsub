@@ -92,7 +92,25 @@ class Sub extends BaseRestResource
         $out = [];
         foreach ($jobs as $job) {
             $payload = json_decode($job->payload, true);
-            $obj = unserialize(Arr::get($payload, 'data.command'));
+            // Constrain unserialize to the known concrete BaseSubscriber
+            // implementations. Without allowed_classes, an attacker who
+            // could write to the jobs table (or otherwise influence the
+            // queue payload) would get PHP gadget-chain RCE via __wakeup
+            // /__destruct on arbitrary classes.
+            //
+            // Known subclasses (as of 2026-05): df-amqp Subscribe,
+            // df-mqtt Subscribe. Adding a new pub/sub backend means
+            // adding its Subscribe class to this list.
+            $allowedSubscribers = [
+                'DreamFactory\\Core\\AMQP\\Jobs\\Subscribe',
+                'DreamFactory\\Core\\MQTT\\Jobs\\Subscribe',
+            ];
+            $obj = unserialize(Arr::get($payload, 'data.command'), [
+                'allowed_classes' => $allowedSubscribers,
+            ]);
+            if (!$obj instanceof \DreamFactory\Core\PubSub\Jobs\BaseSubscriber) {
+                continue; // unexpected class — skip rather than dereference
+            }
             $out[] = [
                 'sub'       => $obj->getPayload(),
                 'attempted' => $job->attempts
